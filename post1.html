@@ -11,16 +11,74 @@
         <div class="w">
             <a href="/">..</a>
             <p class="post-meta">
-                <time datetime="2024-12-27 00:00:00 +0000">2024-12-27</time>
+                <time datetime="2024-12-27 00:00:00 +0000">2025-06-02</time>
             </p>
-            <h1>Post Example With Hr</h1>
+            <h1>Dlaczego tak trudno wykryć Pass-the-Hash — i czemu większość detekcji to iluzja</h1>
+            <h2>Wstęp</h2>
+            Podczas rozwiązywnaia pokoju Threat Hunting: Pivoting z platformy tryhackme.com natknąłem się na śmiałą tezę autora, jakoby atak Pth moznaby było łatwo wykryć w dzienniku Security Windowsa stosująć ponizsze indykatory: 
+                1. Event ID: 4624
+                2. Logon Type: 3 (Network)
+                3. LogonProcessName: NtLmSsp
+                4. KeyLength: 0 
+            O ile trzy pierwsze wskaźniki są mi znane i wystąpią w przypadku ataku Pth ale równiez w przypadku normalnych logowań z wykrozystaniem protokołu NTLM, o tyle KeyLength:0 był dla mnie nowością, a jezeli bylby prawdziwy moglby znacznie ułatwić wykrywanie tego typu ataku. 
 
+            <h2>Hipoteza</h2>
+            Rozszerzyłem swoją wiedzę i poszukałem w Internecie innych sposobów wykrywania ataku Pth. 
+            I tak na przykład w tym artykule https://blog.netwrix.com/2021/11/30/how-to-detect-pass-the-hash-attacks/
+            mozemy przeczytać, ze detekcję mozna oprzeć na:
+                4624 events on your workstations with:
+                Logon Type = 9
+                Authentication Package = Negotiate
+                Logon Process = seclogo
+            Dostępna tu reguła sigma https://github.com/refractionPOINT/sigma_rules/blob/master/windows_builtin/win_pass_the_hash_2.yml
+            równiez potwierdza powyzszych zalozeniach. 
+            
+            Moim zdaniem niemozliwe jest zbudowanie detekcji tego ataku jedynie na podstawie zdarzenia 4624 i postaram się to udowodnić w dalszej częsci artykułu.
+
+            <h2>Opis środowiska testowego</h2>
+                Weryfikację przeprwoadzę w moim środowisku testowym, które zbudowanym na potrzeby testowania rozwiązań detekcji.
+            Składa się ono z:
+                * Windwos Server Datacenter 2022 (OsVersion 10.0.20348) w roli kontrolera domeny.
+                * PC-01 - Windows 11 Enterprise
+                * Kali linux
+                
+            W tym momecie warto zaznaczyć, ze opisane w dalszej części wyniki nie muszą być prawdziwe dla (szczególnie poprzednich) wersji Windowsów.  
+
+            <h2>Opis ataku pass the hash</h2>
+            Atak Pass the Hash polega na wykorzystaniu wcześniej pozyskanego hashu hasła konta domenowego/lokalnego do zalogowania się za jego pomocą do innego komputera/serwera celem przeprwoadzenia np. tzw latteral movement w środowisku domenowym. Atak jest mozliwy, ze wzlgędu na sposób działania procesu "challenge-response" w protokole NTLM. 
+
+
+            <h2>Poprawne logowania a atak pass the hash</h2>
+            
+            Normalne, interaktywne logwania (czyli takie w których uzytkownikowi prezentowany jest ekran pulpitu) wykorzystują protokuł Kerberos. Informację o tym mozna znalezc w Dzienniu zdarzeń Windows Security na kontrolerze domeny lub na endponcie do którego się zalogowano. W zdarzeniu o identyfikatorze 4624, który jest generowany podczas prawidłowego logowania znajduje sie informacja o wykorzystanym protokole. W przypadku logowan NTLM będą tam ponizsze informacje: 
+
+            Logon Process: NtLmSsp
+            Authentication Package: NTLM
+
+            
+            Wykorzystanie tego protokolu jest normalne w srodowisku domenowym i samo wyszukiwanie lgoowan które nastąpiły za jego pomocą wygeneruje bardzo duza ilosc false positiveow. 
+
+            Protokuł ten zostanie wykorzystany np podczas próby uzyskania dostępu do folderu udostępnianego za pomocą SMB. (ponizej screen z takiego logowania oraz zrzut ekranu z uzyskania dostepu do zasobu)
+
+            <h3>Wykonanie ataku pass the hash</h3>
+                        W moim przypadku hash został pozyskany poprzez przeprowadzenie ataku DCSYNC za pomocą oprogramowania mimikatz uruchomionego na stacji roboczej pracującej w mojej domenie testowej. Dla uproszczenia wyłączyłem Windows Defendera (który skutecznie wykrywa i blokuje ogólnodostępną werjsę mimikatza) a program uruchomiłem z konta Administratora domeny. 
+
+
+
+
+            <h2>Sposoby wykrywania ataku</h2>
+            <h3></h3>
+            <h3>Dziennik Zdarzeń Windows Security</h3>
+            <h3>Zeek logs</h3>
+            <h3>Arkime</h3>
+            <h3>Elasticsearch </h3>
             <p>
                 Lorem ipsum
                 <sup id="fnref:1" role="doc-noteref">
                     <a href="#fn:1" class="footnote" rel="footnote">1</a>
+                    adfa
                 </sup>
-                 dolor sit amet, consectetur adipiscing elit. Pellentesque vel lacinia neque. Praesent nulla quam, ullamcorper in sollicitudin ac, molestie sed justo. Cras aliquam, sapien id consectetur accumsan, augue magna faucibus ex, ut ultricies turpis tortor vel ante. In at rutrum tellus. Nullam vestibulum metus eu purus malesuada, volutpat mattis leo facilisis. Sed consectetur, nisl et semper laoreet, velit augue congue nunc, eget eleifend odio erat eu sapien. Phasellus dictum efficitur dapibus. Morbi porta lacinia tincidunt. Nam aliquet est mi, nec lacinia ipsum elementum sed. Nam feugiat ipsum tortor, et pretium purus sollicitudin et.
+                 dolor sit amet, consectetur adipiscing elit. Pellentesque vel lacinia neque. Praesent nulla quam, ullamcorper in sollicitudin ac, molestie sed justo. Cras
             </p>
             <hr/>
             <footer>
