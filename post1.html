@@ -11,11 +11,11 @@
         <div class="w">
             <a href="/">..</a>
             <p class="post-meta">
-                <time datetime="2024-12-27 00:00:00 +0000">2025-06-02</time>
+                <time datetime="2025-06-02 00:00:00 +0000">2025-06-02</time>
             </p>
-            <h1>Dlaczego tak trudno wykryć Pass-the-Hash — i czemu większość detekcji to iluzja</h1>
+            <h1>Dlaczego log 4624 nie wystarczy do wykrycia Pass-the-Hash — i czemu większość detekcji to iluzja</h1>
             <h2>Wstęp</h2>
-            Podczas rozwiązywnaia pokoju Threat Hunting: Pivoting z platformy tryhackme.com natknąłem się na śmiałą tezę autora, jakoby atak Pth moznaby było łatwo wykryć w dzienniku Security Windowsa stosująć ponizsze indykatory: 
+            Podczas rozwiązywnaia pokoju pt. "Threat Hunting: Pivoting" z platformy tryhackme.com natknąłem się na śmiałą tezę autora, jakoby atak Pth moznaby było łatwo wykryć w dzienniku Security Windowsa stosująć ponizsze indykatory: 
                 1. Event ID: 4624
                 2. Logon Type: 3 (Network)
                 3. LogonProcessName: NtLmSsp
@@ -41,45 +41,82 @@
                 * Windwos Server Datacenter 2022 (OsVersion 10.0.20348) w roli kontrolera domeny.
                 * PC-01 - Windows 11 Enterprise
                 * Kali linux
-                
+            W środowisku testowym są dodatkowo generowane logi sysmon i zeek, które są przesyłane do lokalnej instancji ELK. 
+                            
             W tym momecie warto zaznaczyć, ze opisane w dalszej części wyniki nie muszą być prawdziwe dla (szczególnie poprzednich) wersji Windowsów.  
 
             <h2>Opis ataku pass the hash</h2>
             Atak Pass the Hash polega na wykorzystaniu wcześniej pozyskanego hashu hasła konta domenowego/lokalnego do zalogowania się za jego pomocą do innego komputera/serwera celem przeprwoadzenia np. tzw latteral movement w środowisku domenowym. Atak jest mozliwy, ze wzlgędu na sposób działania procesu "challenge-response" w protokole NTLM. 
 
-
             <h2>Poprawne logowania a atak pass the hash</h2>
             
-            Normalne, interaktywne logwania (czyli takie w których uzytkownikowi prezentowany jest ekran pulpitu) wykorzystują protokuł Kerberos. Informację o tym mozna znalezc w Dzienniu zdarzeń Windows Security na kontrolerze domeny lub na endponcie do którego się zalogowano. W zdarzeniu o identyfikatorze 4624, który jest generowany podczas prawidłowego logowania znajduje sie informacja o wykorzystanym protokole. W przypadku logowan NTLM będą tam ponizsze informacje: 
+            Normalne, interaktywne logwania (czyli takie w których uzytkownikowi prezentowany jest ekran pulpitu) wykorzystują protokuł Kerberos. Informację o tym jaki protokół został wykrozystany do logowania są zawarte w zdarzeniu o identyfikatorze 4624, które jest generowane na kontrolerze domeny oraz na komputerze do którego się zalogowano. Ponizej widac takie zdarzenie z normalnego logowania uzytkownika.
+            <img src="/assets/images/post1/normal_login_4624.png" alt="Event 4624 normalnego logowania do komputera" width="600">
+            
+            W przypadku logowan NTLM będą tam ponizsze informacje: 
 
             Logon Process: NtLmSsp
             Authentication Package: NTLM
+            Package Name (NTLM only): NTLM v2
+
+            Wykorzystanie tego protokolu jest normalne w srodowisku domenowym i samo wyszukiwanie logowań, które nastąpiły za jego pomocą wygeneruje bardzo duza ilosc false positive'ów. 
+
+            Protokuł ten zostanie wykorzystany np. podczas próby uzyskania dostępu do zasobów sieciowych dostępnych w domenie. 
+
+            Tutaj przykład uzyskania dostępu do zasobu za pomocą komendy "net use" oraz odpowiadający log
+            <img src="/assets/images/post1/net_use.png" alt="Wykonanie komendy net use" width="600">
+            <img src="/assets/images/post1/net_use_4624_event.png" alt="Event 4624 wywołany podczas dostępu do sharea za pomocą komendy net use" width="600">
+            
+            Ponizej przykład z uzyskania dostępu do zasobu sieciowego za pomocą explorera. 
+            <img src="/assets/images/post1/explorer_share_access.png" alt="Event 4624 wywołany podczas dostępu do sharea za pomocą komendy net use" width="600">
+            <img src="/assets/images/post1/explorer_share_access_event_4624.png" alt="Event 4624 wywołany podczas dostępu do sharea za pomocą komendy net use" width="600">
+            
+
+            <h2>Przeprowadzenie ataku pass the hash</h2>
+            W moim przypadku hash został pozyskany poprzez przeprowadzenie ataku DCSYNC za pomocą oprogramowania mimikatz uruchomionego na stacji roboczej pracującej w mojej domenie testowej. Dla uproszczenia wyłączyłem Windows Defendera (który skutecznie wykrywa i blokuje ogólnodostępną werjsę mimikatza) a program uruchomiłem z konta Administratora domeny. 
+            komenda uzyta do ataku: 
+                lsadump::dcsync /user:Labo\l.skwyalker 
+            - Labo - to nazwa domeny testowej, l.skywaker to uzytkownik. 
+
+            Pozyskany hash skopiowałem do systemu Kali, gdzie wykorzystałem narzędzia impacket-smbexec do przeprowadzenia ataku. Najpierw przeprwoadziłem atak na stację roboczą PC-01. 
+
+            <img src="/assets/images/post1/pth_to_pc01.png" alt="Terminal maszyny Kali z komendą do wykonania ataku pth z uzyciem impacket-smbexec" width="600">
+
+            Sprawdziłem log 4624 w dzienniku Security PC-01. Poza adresem źródłowym z którego pochodzi logowanie, nie ma zadnej roznicy która wskazałaby ze jest to atak PTH. 
+            <img src="/assets/images/post1/4624_pth_on_pc01.png" alt="Event 4624 wywołany w momencie wykonania ataku PTH za pomocą impacket-smbexec" width="600">
+
+            Sprawdzilem równiez logi na kontrolerze domeny. Log 4624 o logowaniu do komputera PC-01 nie został wygenerowany. 
+
+            Następnie sprawdziłem co będę w stanie zobaczyc w logach kontrolera domeny w przypadku wyknonania na nim ataku Pth. 
+            <img src="/assets/images/post1/smbexec_pth_to_dc.png" alt="Komenda do wykonania ataku PTH na kontroler domeny" width="600">
+
+            Sprawdzmy dziennik zdarzen security. Jak widać na DC zostały wygenerowane równiez zdarzenia 4688, które są ciekawe. 
+            <img src="/assets/images/post1/smbexec_pth_na_dc_4624.png" alt="log 4624 wygenerowany na kontrolerze domeny po udanym ataku pth" width="600">
+            <img src="/assets/images/post1/smbexec_pth_na_dc_4688_1.png" alt="log 4688 wygenerowany na kontrolerze domeny po udanym ataku pth" width="600">
+            <img src="/assets/images/post1/smbexec_pth_na_dc_4688_2.png" alt="log 4688 wygenerowany na kontrolerze domeny po udanym ataku pth" width="600">
+            <img src="/assets/images/post1/smbexec_pth_na_dc_4688_3.png" alt="log 4688 wygenerowany na kontrolerze domeny po udanym ataku pth" width="600">
+            Ponownie log 4624 wygląda jak normalne logowanie, natomiast tym razem mozna zaobserwowac ciekawe logi 4688, które świadczą o ekspoitacji. 
+
+            Pomyślałem, ze moze brak roznicy w logu 4624 wynika z narzedzia ktore uzywam, dlatego postanowilem przeprowadzic ten sam atak ponownie, z wykorzystaniem impacket-psexec.
+            <img src="/assets/images/post1/psexec_pth_na_dc.png" alt="log 4624 wygenerowany na kontrolerze domeny po udanym ataku pth" width="600">
+            <img src="/assets/images/post1/psexec_pth_on_dc_5140_share_access.png" alt="log 5140 wygenerowany na kontrolerze domeny po udanym ataku pth" width="600">
+            <img src="/assets/images/post1/psexec_pth_on_dc_4688_1.png" alt="log 4688 wygenerowany na kontrolerze domeny po udanym ataku pth" width="600">
+            <img src="/assets/images/post1/psexec_pth_on_dc_4688_2.png" alt="log 4688 wygenerowany na kontrolerze domeny po udanym ataku pth" width="600">
+
+            Ponownie, logi 4624 nie okazały się przydatne. Warto przyjzec się logom 4688, które dają o wiele więcej wartości w detekcji. 
 
             
-            Wykorzystanie tego protokolu jest normalne w srodowisku domenowym i samo wyszukiwanie lgoowan które nastąpiły za jego pomocą wygeneruje bardzo duza ilosc false positiveow. 
+            <h2>Podsumowanie</h2>
+            Jak widać, przy uzyciu powszechnie dostepnych narzędzi z pakietu impacket przeprowadziłem atak PTH, który nie zostałby wykryty na podstawie logu 4624. 
 
-            Protokuł ten zostanie wykorzystany np podczas próby uzyskania dostępu do folderu udostępnianego za pomocą SMB. (ponizej screen z takiego logowania oraz zrzut ekranu z uzyskania dostepu do zasobu)
+            Zbudowanie detekcji PTH jedynie na podstawie wyłącznie wspomnianego logu jest niemozliwe, poniewaz nie róznią się one niczym od tych generowanych podczas normalnych zachowań występoujących w domenie.
+            
+            Co więcej, okazuje się, ze powszechnie opisywane identyfikatory nie muszą sprawdzać się w naszym środowisku. Zakładam, ze materiały dostępne w internecie zostały przygotowane rzetelnie i dla testowanych tam środowiskach wyniki były prawdziwe. 
 
-            <h3>Wykonanie ataku pass the hash</h3>
-                        W moim przypadku hash został pozyskany poprzez przeprowadzenie ataku DCSYNC za pomocą oprogramowania mimikatz uruchomionego na stacji roboczej pracującej w mojej domenie testowej. Dla uproszczenia wyłączyłem Windows Defendera (który skutecznie wykrywa i blokuje ogólnodostępną werjsę mimikatza) a program uruchomiłem z konta Administratora domeny. 
+            Budowanie detekcji bez weryfikacji w srodowisku laboratoryjnym, które jest zbliozone do srodowiska produkcyjnego daje fałszywe złudzenie bezpieczeństwa, poniewaz tak jak w opisanym przeze mnie przypadku reguła zbudowana na dostępnych w internecie informacjach nigdy albo nigdy nie wywołałaby alertu, albo zrobiłaby to w przypadku false positive'a.  
 
 
 
-
-            <h2>Sposoby wykrywania ataku</h2>
-            <h3></h3>
-            <h3>Dziennik Zdarzeń Windows Security</h3>
-            <h3>Zeek logs</h3>
-            <h3>Arkime</h3>
-            <h3>Elasticsearch </h3>
-            <p>
-                Lorem ipsum
-                <sup id="fnref:1" role="doc-noteref">
-                    <a href="#fn:1" class="footnote" rel="footnote">1</a>
-                    adfa
-                </sup>
-                 dolor sit amet, consectetur adipiscing elit. Pellentesque vel lacinia neque. Praesent nulla quam, ullamcorper in sollicitudin ac, molestie sed justo. Cras
-            </p>
             <hr/>
             <footer>
                 <p>&copy; 2024 ASAP Blog.</p>
