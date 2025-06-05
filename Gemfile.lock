@@ -75,8 +75,10 @@ GEM
       webrick (~> 1.7)
     jekyll-feed (0.17.0)
       jekyll (>= 3.7, < 5.0)
-    jekyll-include-cache (0.2.1)
-      jekyll (>= 3.7, < 5.0)
+    jekyll-remote-theme (0.4.1)
+      addressable (~> 2.0)
+      jekyll (>= 3.5, < 5.0)
+      rubyzip (>= 1.3.0)
     jekyll-sass-converter (3.1.0)
       sass-embedded (~> 1.75)
     jekyll-seo-tag (2.8.0)
@@ -84,11 +86,6 @@ GEM
     jekyll-watch (2.2.1)
       listen (~> 3.0)
     json (2.12.2)
-    just-the-docs (0.10.1)
-      jekyll (>= 3.8.5)
-      jekyll-include-cache
-      jekyll-seo-tag (>= 2.0)
-      rake (>= 12.3.1)
     kramdown (2.5.1)
       rexml (>= 3.3.9)
     kramdown-parser-gfm (1.1.0)
@@ -111,6 +108,7 @@ GEM
       ffi (~> 1.0)
     rexml (3.4.1)
     rouge (4.5.2)
+    rubyzip (2.4.1)
     safe_yaml (1.0.5)
     sass-embedded (1.89.1)
       google-protobuf (~> 4.31)
@@ -173,7 +171,7 @@ DEPENDENCIES
   http_parser.rb (~> 0.6.0)
   jekyll (~> 4.4.1)
   jekyll-feed (~> 0.12)
-  just-the-docs
+  jekyll-remote-theme
   minima (~> 2.5)
   tzinfo (>= 1, < 3)
   tzinfo-data

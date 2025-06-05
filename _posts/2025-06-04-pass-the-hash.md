@@ -82,7 +82,7 @@ Komenda użyta do przeprowadzenia dcsync:
 lsadump::dcsync /user:Labo\l.skwyalker 
 	- Labo - to nazwa domeny testowej, l.skywaker to użytkownik. 
 ```
-Pozyskany hash skopiowałem do systemu Kali, gdzie wykorzystałem narzędzia impacket-smbexec do przeprowadzenia ataków. Najpierw przeprowadziłem atak na stację roboczą PC-01, następnie na kontroler domeny. 
+Pozyskany hash skopiowałem do systemu Kali, gdzie wykorzystałem narzędzia impacket-smbexec do przeprowadzenia ataków. Smbexec wykorzstuje protokół SMB do wykonania zdalnych komend na wybranej stacji. SMB to ten sam protokół, który pozwala na udostępnianie zasobów sieciowych w środowisku domenowym. Oznacza to, ze do logowania najprawdopodobniej zostanie wykorzystany protokół NTLM, co będzie można zobaczyć w logu 4624. Najpierw przeprowadziłem atak na stację roboczą PC-01. 
 
 Komendy na kalim
 
@@ -92,13 +92,14 @@ Event 4624 ze stacji PC-01. Na kontrolerze domeny zdarzenie 4624 o logowaniu do 
 <img src="/assets/images/post1/4624_pth_on_pc01.png" alt="Event 4624 wywołany w momencie wykonania ataku PTH za pomocą impacket-smbexec" width="600">
 
 
-Ok, czas na zaatakowanie kontrolera domeny. 
+Ok, czas na zaatakowanie kontrolera domeny. Narzędzie impacket smbexec wykorzystuje protokół SMB do wykonania poleceń na zdalnym komputerze. Jak wiemy, 
 Komendy na kalim.
 
 <img src="/assets/images/post1/smbexec_pth_to_dc.png" alt="Komenda do wykonania ataku PTH na kontroler domeny" width="600">
 
 Poniżej zdarzenia z dziennika Security na kontrolerze domeny. 
 <img src="/assets/images/post1/smbexec_pth_na_dc_4624.png" alt="log 4624 wygenerowany na kontrolerze domeny po udanym ataku pth" width="600">
+<img src="/assets/images/post1/psexec_pth_on_dc_5140_share_access.png" alt="log 5140 wygenerowany na kontrolerze domeny po udanym ataku pth" width="600">
 <img src="/assets/images/post1/smbexec_pth_na_dc_4688_1.png" alt="log 4688 wygenerowany na kontrolerze domeny po udanym ataku pth" width="600">
 <img src="/assets/images/post1/smbexec_pth_na_dc_4688_2.png" alt="log 4688 wygenerowany na kontrolerze domeny po udanym ataku pth" width="600">
 <img src="/assets/images/post1/smbexec_pth_na_dc_4688_3.png" alt="log 4688 wygenerowany na kontrolerze domeny po udanym ataku pth" width="600">
@@ -116,6 +117,27 @@ Dla dodatkowego upewnienia się przeprowadzić ten sam atak ponownie, z wykorzys
 
 Znów to samo, brak różnicy w logach. 
 
+
+## Jak właściwie zbudowac detekcję? 
+
+Wykorzystując wiedzę o działaniu narzędzi impacket psexec.py i smbexec.py oraz przeglądając zebrane logi przeanalizujmy co dzieje się na atakowanych stacjach: 
+
+1. Wykradziony hash zostaje wykorzystany do uwierzytelnienia się do stacji (event 4624).
+2. Narzędzie uzyskuje dostęp do usługi IPC$ (log 5140 w przypadku psexec).
+3. Zarówno psexec(plik exe) jak i smbexec (plik bat) zapisują pliki w C$ (czyli C:\Windows) a następnie wykorzystuja je do uruchomienia usługi na kontrolerze domeny (logi 4688).
+4. Utworzenie nowej usługi powinno zostać odłozone w logu 7036 w dzienniku SYSTEM i faktycznie tak sie stało (screeny ponizej). 
+
+### Logi potwierdzające utworzenie nowej usługi na DC
+<img src="/assets/images/post1/smbexec_new_service_7045.png" alt="log 7045 wygenerowany na kontrolerze domeny po udanym ataku pth z impacket-smbexec.py" width="600">
+<img src="/assets/images/post1/psexec_new_service_7045.png" alt="log 7045 wygenerowany na kontrolerze domeny po udanym ataku pth z impacket-psexec.py" width="600">
+
+5. Cmd.exe uruchamia process conchost.exe co oznacza zdalne wykonanie komendy lub otworzenie zdalnej interaktywnej sesji. (logi 4688)
+
+Co więc warto monitorować? 
+* Event ID 5140 - dostęp do C$, IPC$, ADMIN$ - szczegółnie ze stacji roboczych. 
+* Event ID 7036 - tworzenie nowych usług. 
+* Event ID 4688 - podejrzane uruchomienia procesów ( przykład z naszego testu tnHcQtqr.exe > cmd.exe  > conhost.exe ). 
+
             
 ## Podsumowanie
 
@@ -124,9 +146,4 @@ Jak widać sposoby detekcji Pass-the-hash oparte na logu 4624 nie sprawdzają si
 Opieranie się wyłącznie na zdarzeniach 4624 może nie przynieść zamierzonych skutków, a jedynie zbudować fałszywe poczucie bezpieczeństwa w organizacji. 
 
 Wierzę, że autorzy artykułów i reguł detekcji opierający się na logach 4624 wykonali rzetelną pracę i prawdopodobnie te metody sprawdzały się w poprzednich wersjach systemów Windows lub w innych konfiguracjach środowiska. 
-            
-Co można zrobić:  
-- Monitorować logi 5140 Świadczące o dostępach do udziałów sieciowych, szczególnie do zasobów takich jak IPC$ i C$. 
-- Monitorować logi 4688 pod kątem uruchomienia dziwnych procesów .. (rozszerzyć) 
-- Koniecznie weryfikować reguły detekcji w środowisku testowym, które jest zbliżone do środowiska produkcyjnego.  
 
