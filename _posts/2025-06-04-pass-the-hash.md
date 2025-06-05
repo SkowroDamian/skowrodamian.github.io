@@ -4,10 +4,12 @@ title:  "Mit detekcji Pass-the-Hash – co naprawdę mówią logi 4624"
 date:   2025-06-04 18:29:56 +0300
 categories: Windows, Server, Logs, Detection 
 ---
-- TOC
-{:toc}
 back_to_top: true
 back_to_top_text: "Back to top"
+
+
+- TOC
+{:toc}
 
 ## Wstęp
 Postanowiłem pogłębić swoją wiedzę na temat ataków na Active Directory. Choć temat był mi znany od strony teoretycznej, brakowało mi doświadczenia w przeprowadzaniu tych ataków. Niedawno przygotowane środowisko testowe było doskonałą okazją do eksperymentów. 
