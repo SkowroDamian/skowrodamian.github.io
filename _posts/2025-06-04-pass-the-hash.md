@@ -6,57 +6,56 @@ categories: Windows, Server, Logs, Detection
 ---
 
 ## Wstęp
-W ostatnim czasie postanowiłem rozszerzyć swoją wiedzę w temacie ataków na Active Directory o których wiele słyszałem, lecz brakowało mi praktycznego doświadczenia w roli atakującego. Uznałem, że będzie to idealna okazja do rozszerzenia wiedzy i wykorzystania środowiska testowego, które ostatnio przygotowałem.
+Postanowiłem pogłębić swoją wiedzę na temat ataków na Active Directory. Choć temat był mi znany od strony teoretycznej, brakowało mi doświadczenia w przeprowadzaniu tych ataków. Niedawno przygotowane środowisko testowe było doskonałą okazją do eksperymentów. 
 
-Kilka dni temu przerabiałem pokój o nazwie "Threat Hunting: Pivoting" na platformie [TryHackMe](https://tryhackme.com), w którym omówiony był sposób detekcji ataku Pass-The-Hash. Każdy, kto odrobine interesuje się cyberbezpieczeństwem zapewne o tym ataku słyszał, a w Internecie temat wydaje się wyczerpany i przebadany na wszystkie sposoby. Brzmi jak sztampowy przykład do sprawdzenia, metody ataku opisane wiele razy, sposób detekcji również, powinno pójść gładko i bez niespodzianek, prawda?
+Kilka dni temu realizowałem pokój o nazwie "Threat Hunting: Pivoting" na platformie [TryHackMe](https://tryhackme.com),  gdzie omawiano sposób detekcji ataku Pass-The-Hash (PtH). Uznałem, że będzie to idealny przykład do sprawdzenia. Temat ten jest powszechnie znany, szeroko opisywany i pozornie dobrze zrozumiany. Z pozoru powinno być prosto: zidentyfikować logi, porównać detekcje, wyciągnąć wnioski. Czy na pewno?
 
-## Sposoby detekcji
-Wykonałem zapytanie do Google'a ("how to detect pass the hash in windows logs") w celu zorientowania się czego powinienem szukać w logach w celu wykonania ataku i co się okazuje, Internet nie jest zgodny co do sposobu wykrywania ataku. Wiele źródeł opisuje, że wykrywa się go w zdarzeniu 4624, ale różnice są w szczegółach. Większość detekcji opiera się na poniższych założeniach: 
-* Event ID: 4624
-* Logon Type: 3 (Network) 
-* LogonProcessName: NtLmSsp
-* KeyLength: 0 
+## Popularne sposoby detekcji PtH
+W poszukiwaniu informacji wykonałem zapytanie do Google: _"how to detect pass the hash in windows logs"_ . Internet nie jest zgodny co do jednej, skutecznej metody. Najczęściej wskazywane indykatory to: 
+* *Event ID:* 4624
+* *Logon Type:* 3 (Network) 
+* *LogonProcessName*: NtLmSsp
+* *KeyLength*: 0 
 
-Są również takie, które sugerują, że Pth wykryjemy poniższą detekcją:
-* 4624 events on your workstations with:
-* Logon Type = 9 (NewCredentials)
-* Authentication Package = Negotiate
-* Logon Process = seclogo
+jak również:
+* *Event ID:* 4624 events on your workstations with:
+* *Logon Type:*  9 (NewCredentials)
+* *Authentication Package* = Negotiate
+* *Logon Process* = seclogo
 
-Oba przykłady są bardzo konkretne, ale czy to wystarczy do złapania tego ataku? Zobaczmy jak to wygląda w praktyce. Oto plan:
-
-1. Zasymulowanie normalnego logowania za pomocą NTLM. 
-2. Przeprowadzenie ataku Pth z maszyny kali. 
-3. Porównanie wygenerowanych logów. 
 
 ## Opis środowiska testowego
 
-Środowisko testowe, które przygotowałem do tego typu testów składa się z:
-* Windwos Server Datacenter 2022 (OsVersion 10.0.20348) w roli kontrolera domeny.
-* PC-01 - Windows 11 Enterprise
-* Kali linux
+Przygotowane środowisko testowe:
+* *Windows Server Datacenter 2022* (OsVersion 10.0.20348) - Kontroler Domeny
+* *PC-01* z Windows 11 Enterprise
+* *Kali linux* - maszyna atakującego. 
 
 Dodatkowo, w celu wspomagania procesu testowania środowisko wyposażone jest w: 
-* Serwer Ubuntu z Arkime, który zbiera pcap ze wszystkich maszyn oraz generuje logi Zeek. 
-* Serwer Ubuntu z statkiem ELK, który zbiera logi z Zeeka oraz z hostów za pomocą winlogbeatów. 
+*  *Ubuntu + Arkime* - przechwytywanie ruchu sieciowego i generowanie logów Zeek.
+*  *Ubuntu + ELK* - agregacja logów z hostów. 
                             
-W tym momencie warto zaznaczyć, ze opisane w dalszej części wyniki nie muszą być prawdziwe dla wszystkich (szczególnie poprzednich) wersji Windowsów.  
+W tym momencie warto zaznaczyć, ze opisane w dalszej części wyniki nie muszą być prawdziwe dla wszystkich (szczególnie poprzednich) wersji Windowsów i ich konfiguracji.  
 
 ## Opis ataku Pass-the-hash
 
-Atak Pass the Hash polega na wykorzystaniu wcześniej pozyskanego hashu hasła konta domenowego/lokalnego do zalogowania się za jego pomocą do innego komputera/serwera celem przeprwoadzenia np. tzw latteral movement w środowisku domenowym. Atak jest możliwy, ze względu na sposób działania procesu "challenge-response" w protokole NTLM. 
+Atak Pass-the-Hash polega na wykorzystaniu wcześniej pozyskanego hashu hasła konta (domenowego lub lokalnego) do uwierzytelnienia się w systemie bez znajomości hasła. Atak jest możliwy, ze względu na sposób działania mechanizmu "challenge-response" w protokole NTLM. 
 
 
-## Poprawne logowania a atak pass the hash
-            
-Ponieważ wykorzystywany jest tutaj protokół NTLM, jest to dobry wskaźnik jeżeli chodzi o sposób wykrywania ataku, ponieważ interaktywne logowania (czyli takie w których użytkownikowi prezentowany jest ekran pulpitu) wykorzystują protokół Kerberos. Można to łatwo zaobserwować w zdarzeniach 4624. Niestety, protokół NTLM jest powszechnie wykorzystywany w środowisku domenowych i nie wszystkie logowania z wykorzystaniem tego protokołu wskazują na atak, a raczej większość z nich atakiem nie jest. 
-Zdarzenia 4624 świadczące o logowaniu protokołem zostaną wygenerowane np. W przypadku uzyskania dostępu do zasobów sieciowych w domenie. Można to zrobić za pomocą explorer.exe lub cmd.exe komendą 
+## Zwykłe logowania vs Pass-the-Hash
+
+Protokół NTLM jest dobrym punktem odniesienia, ponieważ logowania interaktywne (czyli takie w których użytkownikowi prezentowany jest ekran pulpitu) korzystają z protokołu Kerberos. Logi 4624 dla NTLM pojawiają się np podczas dostępu do zasobów sieciowych: 
+* za pomocą komendy:
 {% highlight cmd%}
 Net use \\10.10.10.1\c$
 {% endhighlight %}
 
-Dokonałem dostępu do mojego zasobu sieciowego za pomocą obu tych opcji i sprawdziłem zdarzenia 4624 dla tych logowań, wyniki przedstawiam poniżej na screenach. Proszę zwrócić uwagę na: 
+* za pomocą explorer.exe.
+
+Dla takich akcji typowe parametry to: 
+
 ```
+Logon Type: 3
 Logon Process: NtLmSsp
 Authentication Package: NTLM
 Package Name (NTLM only): NTLM v2
@@ -72,78 +71,73 @@ Package Name (NTLM only): NTLM v2
 <img src="/assets/images/post1/explorer_share_access.png" alt="Event 4624 wywołany podczas dostępu do sharea za pomocą komendy net use" width="600">
 <img src="/assets/images/post1/explorer_share_access_event_4624.png" alt="Event 4624 wywołany podczas dostępu do sharea za pomocą komendy net use" width="600">
             
+## Test ataku Pass-the-Hash
 
-## Przeprowadzenie ataku Pass-the-hash
+Uzyskałem hash konta l.skywalker przez atak DCSYNC z użyciem Mimikatz na hoście domenowym. Nastepnie przeprowadziłem atak PtH narzędziem impacket-smbexec z systemu Kali. 
 
-Wiem jak wyglądają logi z nieszkodliwego logowania NTLM, czas zobaczyć jak wyglądają w przypadku ataku Pass-The-Hash. Oczywiście do przeprowadzenia ataku potrzebny jest hash hasła użytkownika. Ja pozyskałem hash poprzez przeprowadzenie ataku DCSYNC za pomocą oprogramowania mimikatz uruchomionego na hoście w domenie. Dla uproszczenia wyłączyłem Windows Defendera (który skutecznie wykrywa i blokuje ogólnodostępną wersję mimikatza) a program uruchomiłem z konta administratora domeny. 
+Smbexec oraz psexec wykorzstuje protokół SMB do wykonania zdalnych komend. SMB to protokół, który pozwala na udostępnianie zasobów sieciowych w środowisku domenowym. Oznacza to, że podczas użycia tych narzędzi zostanie wygenerowany log 4624 z wskazanymi wcześniej parametrami: 
 
-Komenda użyta do przeprowadzenia dcsync: 
 ```
-lsadump::dcsync /user:Labo\l.skwyalker 
-	- Labo - to nazwa domeny testowej, l.skywaker to użytkownik. 
+Logon Type: 3
+Logon Process: NtLmSsp
+Authentication Package: NTLM
+Package Name (NTLM only): NTLM v2
 ```
-Pozyskany hash skopiowałem do systemu Kali, gdzie wykorzystałem narzędzia impacket-smbexec do przeprowadzenia ataków. Smbexec wykorzstuje protokół SMB do wykonania zdalnych komend na wybranej stacji. SMB to ten sam protokół, który pozwala na udostępnianie zasobów sieciowych w środowisku domenowym. Oznacza to, ze do logowania najprawdopodobniej zostanie wykorzystany protokół NTLM, co będzie można zobaczyć w logu 4624. Najpierw przeprowadziłem atak na stację roboczą PC-01. 
 
-Komendy na kalim
+Obserwacje: 
+* Na PC-01 pojawił się log 4624. Niczym nie różnił się od normalnego logowania z NTLM. 
+* Na kontrolerze domeny nie pojawił się odpowiadający log logowania zdalnego.
 
+Następnie wykonałem ten sam atak na DC. Wynik: 
+* Log 4624 identyczny jak przy zwykłym dostępie po SMB.
+* Dodatkowe logi 5140 (dostęp do udziałów) i 4688 (uruchomienie procesu).
+
+Poniżej przedstawiam screeny logów. 
+
+#### Atak na PC-01
 <img src="/assets/images/post1/pth_to_pc01.png" alt="Terminal maszyny Kali z komendą do wykonania ataku pth z użyciem impacket-smbexec" width="600">
 
-Event 4624 ze stacji PC-01. Na kontrolerze domeny zdarzenie 4624 o logowaniu do komputera PC-01 nie zostało wygenerowane. 
 <img src="/assets/images/post1/4624_pth_on_pc01.png" alt="Event 4624 wywołany w momencie wykonania ataku PTH za pomocą impacket-smbexec" width="600">
 
 
-Ok, czas na zaatakowanie kontrolera domeny. Narzędzie impacket smbexec wykorzystuje protokół SMB do wykonania poleceń na zdalnym komputerze. Jak wiemy, 
-Komendy na kalim.
+#### Atak na kontroler domeny narzędziem impacket-smbexec
 
-<img src="/assets/images/post1/smbexec_pth_to_dc.png" alt="Komenda do wykonania ataku PTH na kontroler domeny" width="600">
-
-Poniżej zdarzenia z dziennika Security na kontrolerze domeny. 
+<img src="/assets/images/post1/smbexec_pth_to_dc.png" alt="Komenda do wykonania ataku PTH na kontroler domeny" width="600"> 
 <img src="/assets/images/post1/smbexec_pth_na_dc_4624.png" alt="log 4624 wygenerowany na kontrolerze domeny po udanym ataku pth" width="600">
 <img src="/assets/images/post1/psexec_pth_on_dc_5140_share_access.png" alt="log 5140 wygenerowany na kontrolerze domeny po udanym ataku pth" width="600">
 <img src="/assets/images/post1/smbexec_pth_na_dc_4688_1.png" alt="log 4688 wygenerowany na kontrolerze domeny po udanym ataku pth" width="600">
 <img src="/assets/images/post1/smbexec_pth_na_dc_4688_2.png" alt="log 4688 wygenerowany na kontrolerze domeny po udanym ataku pth" width="600">
 <img src="/assets/images/post1/smbexec_pth_na_dc_4688_3.png" alt="log 4688 wygenerowany na kontrolerze domeny po udanym ataku pth" width="600">
 
-Ponownie, log 4624 wygląda te wygenerowane podczas normalne aktywności. Tym razem można zaobserwować ciekawe logi 4688, które świadczą o tym, że wydarzyło się coś ciekawego. 
+<img src="/assets/images/post1/smbexec_new_service_7045.png" alt="log 7045 wygenerowany na kontrolerze domeny po udanym ataku pth z impacket-smbexec.py" width="600">
 
-No dobra, ale co ze wskaźnikami odnoszącymi się do zdarzenia 4624, które znalazłem w Internecie, część z nich nie występuje, a część występuje w normalnej aktywności, nie pozwala to na zbudowanie detekcji. 
-
-Dla dodatkowego upewnienia się przeprowadzić ten sam atak ponownie, z wykorzystaniem impacket-psexec.
-
+#### Atak na kontroler domeny narzędziem impacket-psexec
 <img src="/assets/images/post1/psexec_pth_na_dc.png" alt="log 4624 wygenerowany na kontrolerze domeny po udanym ataku pth" width="600">
 <img src="/assets/images/post1/psexec_pth_on_dc_5140_share_access.png" alt="log 5140 wygenerowany na kontrolerze domeny po udanym ataku pth" width="600">
 <img src="/assets/images/post1/psexec_pth_on_dc_4688_1.png" alt="log 4688 wygenerowany na kontrolerze domeny po udanym ataku pth" width="600">
 <img src="/assets/images/post1/psexec_pth_on_dc_4688_2.png" alt="log 4688 wygenerowany na kontrolerze domeny po udanym ataku pth" width="600">
-
-Znów to samo, brak różnicy w logach. 
+<img src="/assets/images/post1/psexec_new_service_7045.png" alt="log 7045 wygenerowany na kontrolerze domeny po udanym ataku pth z impacket-psexec.py" width="600">
 
 
 ## Jak właściwie zbudowac detekcję? 
 
-Wykorzystując wiedzę o działaniu narzędzi impacket psexec.py i smbexec.py oraz przeglądając zebrane logi przeanalizujmy co dzieje się na atakowanych stacjach: 
+Na podstawie uzyskanych logów i znajomości działania `psexec.py` oraz `smbexec.py` wiemy, że:
 
-1. Wykradziony hash zostaje wykorzystany do uwierzytelnienia się do stacji (event 4624).
-2. Narzędzie uzyskuje dostęp do usługi IPC$ (log 5140 w przypadku psexec).
-3. Zarówno psexec(plik exe) jak i smbexec (plik bat) zapisują pliki w C$ (czyli C:\Windows) a następnie wykorzystuja je do uruchomienia usługi na kontrolerze domeny (logi 4688).
-4. Utworzenie nowej usługi powinno zostać odłozone w logu 7036 w dzienniku SYSTEM i faktycznie tak sie stało (screeny ponizej). 
+1. Wykorzystywany hash uwierzytelnia się przez NTLM (Event ID 4624).
+2. Następuje dostęp do udziałów IPC$, C$, ADMIN$ (Event ID 5140).
+3. Narzędzia zapisują pliki do C:\Windows i uruchamiają je jako usługę (Event ID 4688).
+4. Tworzenie nowej usługi rejestrowane jest jako 7045 i 7036 (stan uruchomienia).
+5. `cmd.exe` uruchamia `conhost.exe` – świadczy to o dostępie interaktywnym lub zdalnym shellu (Event ID 4688). 
 
-### Logi potwierdzające utworzenie nowej usługi na DC
-<img src="/assets/images/post1/smbexec_new_service_7045.png" alt="log 7045 wygenerowany na kontrolerze domeny po udanym ataku pth z impacket-smbexec.py" width="600">
-<img src="/assets/images/post1/psexec_new_service_7045.png" alt="log 7045 wygenerowany na kontrolerze domeny po udanym ataku pth z impacket-psexec.py" width="600">
-
-5. Cmd.exe uruchamia process conchost.exe co oznacza zdalne wykonanie komendy lub otworzenie zdalnej interaktywnej sesji. (logi 4688)
-
-Co więc warto monitorować? 
+### Co monitorować? 
+Zatem skuteczniejszym podejściem jest korelowanie zdarzeń:
 * Event ID 5140 - dostęp do C$, IPC$, ADMIN$ - szczegółnie ze stacji roboczych. 
-* Event ID 7036 - tworzenie nowych usług. 
-* Event ID 4688 - podejrzane uruchomienia procesów ( przykład z naszego testu tnHcQtqr.exe > cmd.exe  > conhost.exe ). 
+* Event ID 7045 - tworzenie nowych usług. 
+* Event ID 4688 - Nietypowe ciągi wywołań procesów: `tnHcQtqr.exe` → `cmd.exe` → `conhost.exe`. 
+Dopiero zestawienie ich ze sobą i analiza kontekstu źródłowego IP, konta oraz procesu daje szansę na detekcję.
 
-            
 ## Podsumowanie
 
-Jak widać sposoby detekcji Pass-the-hash oparte na logu 4624 nie sprawdzają się w nowoczesnych środowiskach domenowych. Jedyna zaobserwowana różnica to adres źródłowy, który zmienił się, ponieważ atak wykonałem z maszyny z zainstalowanym Kali, ale nic nie stoi na przeszkodzie, żeby to samo wykonać ze skompromitowanej stacji roboczej. 
+Wnioski z testów są jednoznaczne — samo zdarzenie 4624 nie stanowi wiarygodnego wskaźnika ataku Pass-the-Hash. W nowoczesnych środowiskach domenowycg, gdzie NTLM jest nadal wykorzystywany, takie logowania są częste i niekoniecznie złośliwe. Różnica sprowadza się często tylko do adresu źródłowego.
 
-Opieranie się wyłącznie na zdarzeniach 4624 może nie przynieść zamierzonych skutków, a jedynie zbudować fałszywe poczucie bezpieczeństwa w organizacji. 
-
-Wierzę, że autorzy artykułów i reguł detekcji opierający się na logach 4624 wykonali rzetelną pracę i prawdopodobnie te metody sprawdzały się w poprzednich wersjach systemów Windows lub w innych konfiguracjach środowiska. 
-
+Poleganie wyłącznie na zdarzeniach 4624 może wprowadzać w błąd i budować fałszywe poczucie bezpieczeństwa. Skuteczna detekcja wymaga korelacji wielu zdarzeń, znajomości środowiska oraz zrozumienia technik wykorzystywanych przez narzędzia atakujących.
