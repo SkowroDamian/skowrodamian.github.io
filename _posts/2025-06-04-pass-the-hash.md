@@ -128,5 +128,5 @@ Wierzę, że autorzy artykułów i reguł detekcji opierający się na logach 46
 Co można zrobić:  
 - Monitorować logi 5140 Świadczące o dostępach do udziałów sieciowych, szczególnie do zasobów takich jak IPC$ i C$. 
 - Monitorować logi 4688 pod kątem uruchomienia dziwnych procesów .. (rozszerzyć) 
-- Koniecznie weryfikować reguły detekcji w środowisku testowym, zbliżonym do środowiska produkcyjnego. 
+- Koniecznie weryfikować reguły detekcji w środowisku testowym, które jest zbliżone do środowiska produkcyjnego.  
 
