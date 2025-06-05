@@ -1,5 +1,5 @@
 ---
-layout: minimal
+layout: home
 title: Blog
 permalink: /blog/
 ---
