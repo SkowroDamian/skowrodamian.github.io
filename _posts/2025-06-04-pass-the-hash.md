@@ -69,7 +69,7 @@ Package Name (NTLM only): NTLM v2
 **Tip**: Protokół uwierzytelniania wybierany przez system Windows zależy od sposobu, w jaki adresowany jest serwer.
 
 * Użycie **adresu IP** (np. `\\10.10.10.10\`) powoduje, że Kerberos nie może być użyty brak pełnej nazwy domenowej (FQDN), więc Windows domyślnie przełącza się na **NTLM**.
-Jeśli natomiast użyjemy **nazwy hosta** w domenie (np. `\\dc1.lab.local\`), system może zastosować **Kerberos**, o ile spełnione są wymagania (np. obecność SPN i ważny ticket TGT).
+* Jeśli natomiast użyjemy **nazwy hosta** w domenie (np. `\\dc1.lab.local\`), system może zastosować **Kerberos**, o ile spełnione są wymagania (np. obecność SPN i ważny ticket TGT).
 
 ### Przykład uzyskania dostępu do zasobu za pomocą komendy "net use" oraz odpowiadający log
 
