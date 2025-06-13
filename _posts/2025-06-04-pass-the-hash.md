@@ -23,10 +23,10 @@ W poszukiwaniu informacji wykonałem zapytanie do Google: _"how to detect pass t
 * **KeyLength:** 0 
 
 jak również:
-* **Event ID:** 4624 events on your workstations with:
+* **Event ID:** 4624
 * **Logon Type:**  9 (NewCredentials)
 * **Authentication Package** = Negotiate
-* **Logon Process* = seclogo
+* **Logon Process** = seclogo
 
 
 ## Opis środowiska testowego
