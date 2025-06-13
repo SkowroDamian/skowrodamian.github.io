@@ -17,28 +17,28 @@ Kilka dni temu realizowałem pokój o nazwie "Threat Hunting: Pivoting" na platf
 
 ## Popularne sposoby detekcji PtH
 W poszukiwaniu informacji wykonałem zapytanie do Google: _"how to detect pass the hash in windows logs"_ . Internet nie jest zgodny co do jednej, skutecznej metody. Najczęściej wskazywane indykatory to: 
-* *Event ID:* 4624
-* *Logon Type:* 3 (Network) 
-* *LogonProcessName*: NtLmSsp
-* *KeyLength*: 0 
+* **Event ID:** 4624
+* **Logon Type:** 3 (Network) 
+* **LogonProcessName:** NtLmSsp
+* **KeyLength:** 0 
 
 jak również:
-* *Event ID:* 4624 events on your workstations with:
-* *Logon Type:*  9 (NewCredentials)
-* *Authentication Package* = Negotiate
-* *Logon Process* = seclogo
+* **Event ID:** 4624 events on your workstations with:
+* **Logon Type:**  9 (NewCredentials)
+* **Authentication Package** = Negotiate
+* **Logon Process* = seclogo
 
 
 ## Opis środowiska testowego
 
 Przygotowane środowisko testowe:
-* *Windows Server Datacenter 2022* (OsVersion 10.0.20348) - Kontroler Domeny
-* *PC-01* z Windows 11 Enterprise
-* *Kali linux* - maszyna atakującego. 
+* **Windows Server Datacenter 2022** (OsVersion 10.0.20348) - Kontroler Domeny
+* **PC-01** z Windows 11 Enterprise
+* **Kali linux** - maszyna atakującego. 
 
 Dodatkowo, w celu wspomagania procesu testowania środowisko wyposażone jest w: 
-*  *Ubuntu + Arkime* - przechwytywanie ruchu sieciowego i generowanie logów Zeek.
-*  *Ubuntu + ELK* - agregacja logów z hostów. 
+*  **Ubuntu + Arkime + Zeek** - przechwytywanie ruchu sieciowego i generowanie logów Zeek.
+*  **Ubuntu + ELK** - agregacja logów z hostów. 
                             
 W tym momencie warto zaznaczyć, ze opisane w dalszej części wyniki nie muszą być prawdziwe dla wszystkich (szczególnie poprzednich) wersji Windowsów i ich konfiguracji.  
 
@@ -65,7 +65,11 @@ Logon Process: NtLmSsp
 Authentication Package: NTLM
 Package Name (NTLM only): NTLM v2
 ```
- 
+
+**Tip**: Protokół uwierzytelniania wybierany przez system Windows zależy od sposobu, w jaki adresowany jest serwer.
+
+* Użycie **adresu IP** (np. `\\10.10.10.10\`) powoduje, że Kerberos nie może być użyty brak pełnej nazwy domenowej (FQDN), więc Windows domyślnie przełącza się na **NTLM**.
+Jeśli natomiast użyjemy **nazwy hosta** w domenie (np. `\\dc1.lab.local\`), system może zastosować **Kerberos**, o ile spełnione są wymagania (np. obecność SPN i ważny ticket TGT).
 
 ### Przykład uzyskania dostępu do zasobu za pomocą komendy "net use" oraz odpowiadający log
 
@@ -143,6 +147,6 @@ Dopiero zestawienie ich ze sobą i analiza kontekstu źródłowego IP, konta ora
 
 ## Podsumowanie
 
-Wnioski z testów są jednoznaczne — samo zdarzenie 4624 nie stanowi wiarygodnego wskaźnika ataku Pass-the-Hash. W nowoczesnych środowiskach domenowycg, gdzie NTLM jest nadal wykorzystywany, takie logowania są częste i niekoniecznie złośliwe. Różnica sprowadza się często tylko do adresu źródłowego.
+Wnioski z testów są jednoznaczne — samo zdarzenie 4624 nie stanowi wiarygodnego wskaźnika ataku Pass-the-Hash. W nowoczesnych środowiskach domenowych, gdzie NTLM jest nadal wykorzystywany, takie logowania są częste i niekoniecznie złośliwe. Różnica sprowadza się często tylko do adresu źródłowego.
 
 Poleganie wyłącznie na zdarzeniach 4624 może wprowadzać w błąd i budować fałszywe poczucie bezpieczeństwa. Skuteczna detekcja wymaga korelacji wielu zdarzeń, znajomości środowiska oraz zrozumienia technik wykorzystywanych przez narzędzia atakujących.
